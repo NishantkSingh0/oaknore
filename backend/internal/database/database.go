@@ -43,8 +43,14 @@ func New(cfg config.DatabaseConfig) (*sqlx.DB, error) {
 }
 
 // RunMigrations applies all pending UP migrations from the migrations/ directory.
-func RunMigrations(dsn string) error {
-	m, err := migrate.New("file://migrations", dsn)
+// dsn must be a postgres:// URL — key=value DSNs are not accepted by golang-migrate.
+func RunMigrations(cfg config.DatabaseConfig) error {
+	// Build a proper postgres:// URL regardless of what was passed in.
+	url := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		cfg.User, cfg.Password, cfg.Host, cfg.Port, cfg.Name, cfg.SSLMode,
+	)
+	m, err := migrate.New("file://migrations", url)
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}

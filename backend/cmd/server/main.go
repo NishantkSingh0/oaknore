@@ -31,7 +31,7 @@ func main() {
 	}
 	defer db.Close()
 
-	if err = database.RunMigrations(cfg.Database.DSN); err != nil {
+	if err = database.RunMigrations(cfg.Database); err != nil {
 		log.Fatalf("migrations: %v", err)
 	}
 

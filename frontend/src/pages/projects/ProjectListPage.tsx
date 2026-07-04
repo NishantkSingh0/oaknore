@@ -8,6 +8,7 @@ import StatusBadge from '@/components/ui/StatusBadge'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import EmptyState from '@/components/ui/EmptyState'
 import { format } from 'date-fns'
+import ProjectCreatePage from './ProjectCreatePage'
 import type { ProjectStatus } from '@/types'
 
 const STATUSES: { value: ProjectStatus | ''; label: string }[] = [
@@ -21,6 +22,7 @@ const STATUSES: { value: ProjectStatus | ''; label: string }[] = [
 
 export default function ProjectListPage() {
   const navigate = useNavigate()
+  const [showCreate, setShowCreate] = useState(false)
   const { canAccess } = useAuth()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<ProjectStatus | ''>('')
@@ -39,9 +41,10 @@ export default function ProjectListPage() {
       <div className="flex items-center justify-between">
         <h1 className="page-title">Projects</h1>
         {canAccess('SUPER_ADMIN', 'ADMIN') && (
-          <button onClick={() => navigate('/projects/new')} className="btn-primary">
-            <Plus size={16} /> New Project
-          </button>
+        <button onClick={() => setShowCreate(true)} className="btn-primary">
+            <Plus size={16}/>
+            New Project
+        </button>
         )}
       </div>
 
@@ -119,6 +122,11 @@ export default function ProjectListPage() {
             </div>
           )}
         </>
+      )}
+      {showCreate && (
+        <ProjectCreatePage
+            onClose={() => setShowCreate(false)}
+        />
       )}
     </div>
   )

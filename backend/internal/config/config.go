@@ -126,7 +126,9 @@ func Load() (*Config, error) {
 
 	// JWT
 	accessExp, _ := time.ParseDuration(getEnv("JWT_ACCESS_EXPIRY", "15m"))
-	refreshExp, _ := time.ParseDuration(getEnv("JWT_REFRESH_EXPIRY", "168h")) // 7d
+	refreshExpStr := getEnv("JWT_REFRESH_EXPIRY", "168h")
+	// Support shorthand "7d" → convert to hours
+	refreshExp := parseDurationWithDays(refreshExpStr)
 	cfg.JWT = JWTConfig{
 		Secret:        mustEnv("JWT_SECRET"),
 		AccessExpiry:  accessExp,
@@ -216,4 +218,19 @@ func splitTrim(s string, sep rune) []string {
 	}
 	out = append(out, cur)
 	return out
+}
+
+// parseDurationWithDays handles "7d" in addition to standard Go durations.
+func parseDurationWithDays(s string) time.Duration {
+	if len(s) > 1 && s[len(s)-1] == 'd' {
+		days := 0
+		for _, c := range s[:len(s)-1] {
+			if c >= '0' && c <= '9' {
+				days = days*10 + int(c-'0')
+			}
+		}
+		return time.Duration(days) * 24 * time.Hour
+	}
+	d, _ := time.ParseDuration(s)
+	return d
 }

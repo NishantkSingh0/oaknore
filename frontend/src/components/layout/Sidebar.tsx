@@ -27,55 +27,156 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="flex h-screen w-60 flex-col bg-brand-950 text-white">
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 font-bold text-sm">P</div>
-        <div>
+    <aside
+      className=" group flex h-screen w-[72px] hover:w-64 flex-col bg-gray-950 text-white transition-all duration-300 ease-in-out overflow-hidden"
+    >      {/* Logo */}
+      <div className="flex items-center gap-3 border-b border-white/10 px-5 py-5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-500 font-bold text-sm">
+          P
+        </div>
+
+        <div
+          className="
+            opacity-0
+            group-hover:opacity-100
+            transition-opacity
+            duration-200
+            whitespace-nowrap
+          "
+        >
           <p className="text-sm font-semibold leading-none">PMS3</p>
-          <p className="text-[10px] text-brand-400 mt-0.5">Production System</p>
+          <p className="mt-0.5 text-[10px] text-brand-400">
+            Production System
+          </p>
         </div>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-0.5">
-        {nav.filter(n => n.roles.some(r => canAccess(r as any))).map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) => clsx(
-              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-brand-700 text-white'
-                : 'text-brand-300 hover:bg-white/5 hover:text-white',
-            )}
-          >
-            <Icon size={17} />
-            <span className="flex-1">{label}</span>
-            {to === '/notifications' && unread > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                {unread > 99 ? '99+' : unread}
+      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
+        {nav
+          .filter(n => n.roles.some(r => canAccess(r as any)))
+          .map(({ to, label, icon: Icon }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                clsx(
+                  "flex items-center rounded-lg px-3 py-2.5 transition-all",
+                  isActive
+                    ? "bg-gray-800 text-white"
+                    : "text-brand-200 hover:bg-gray-800 hover:text-white"
+                )
+              }
+            >
+              <Icon
+                size={18}
+                className="shrink-0 mx-auto group-hover:mx-0 transition-all duration-300"
+              />
+
+              <span
+                className="
+                  ml-3
+                  flex-1
+                  overflow-hidden
+                  whitespace-nowrap
+                  opacity-0
+                  w-0
+                  group-hover:w-auto
+                  group-hover:opacity-100
+                  transition-all
+                  duration-200
+                "
+              >
+                {label}
               </span>
-            )}
-          </NavLink>
-        ))}
+
+              {to === "/notifications" && unread > 0 && (
+                <span
+                  className="
+                    ml-auto
+                    opacity-0
+                    group-hover:opacity-100
+                    transition-opacity
+                    flex h-4 min-w-4 items-center justify-center
+                    rounded-full bg-red-500 px-1 text-[10px]
+                  "
+                >
+                  {unread > 99 ? "99+" : unread}
+                </span>
+              )}
+            </NavLink>
+          ))}
       </nav>
 
       {/* User */}
-      <div className="border-t border-white/10 p-3 space-y-0.5">
-        <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold uppercase">
-            {user?.first_name?.[0]}{user?.last_name?.[0]}
+      <div className="border-t border-white/10 p-3">
+        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-600 text-xs font-semibold uppercase">
+            {user?.first_name?.[0]}
+            {user?.last_name?.[0]}
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-medium text-white truncate">{user?.first_name} {user?.last_name}</p>
-            <p className="text-[10px] text-brand-400 truncate">{user?.role?.replace('_', ' ')}</p>
+
+          <div
+            className="
+              flex-1
+              overflow-hidden
+              opacity-0
+              group-hover:opacity-100
+              transition-opacity
+            "
+          >
+            <p className="truncate text-xs font-medium">
+              {user?.first_name} {user?.last_name}
+            </p>
+
+            <p className="truncate text-[10px] text-brand-400">
+              {user?.role?.replace("_", " ")}
+            </p>
           </div>
-          <ChevronRight size={14} className="text-brand-500" />
+
+          <ChevronRight
+            size={14}
+            className="
+              opacity-0
+              group-hover:opacity-100
+              transition-opacity
+            "
+          />
         </div>
-        <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-brand-400 hover:bg-white/5 hover:text-white transition-colors">
-          <LogOut size={15} />
-          Sign out
+
+        <button
+          onClick={handleLogout}
+          className="
+            mt-2
+            flex
+            w-full
+            items-center
+            rounded-lg
+            px-3
+            py-2
+            hover:bg-white/5
+          "
+        >
+          <LogOut
+            size={16}
+            className="shrink-0 mx-auto group-hover:mx-0 transition-all"
+          />
+
+          <span
+            className="
+              ml-3
+              opacity-0
+              w-0
+              overflow-hidden
+              whitespace-nowrap
+              group-hover:w-auto
+              group-hover:opacity-100
+              transition-all
+            "
+          >
+            Sign out
+          </span>
         </button>
       </div>
     </aside>
