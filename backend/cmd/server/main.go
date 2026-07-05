@@ -178,28 +178,19 @@ func main() {
 					// Issues
 					r.Route("/issues", func(r chi.Router) {
 						r.Get("/", issueH.List)
-						r.Group(func(r chi.Router) {
-							r.Use(appmw.RequireRoles(models.RoleLayer3))
-							r.Post("/", issueH.Create)
-						})
+						r.Post("/", issueH.Create)
 					})
 
 					// Reworks
 					r.Route("/reworks", func(r chi.Router) {
 						r.Get("/", reworkH.List)
-						r.Group(func(r chi.Router) {
-							r.Use(appmw.RequireRoles(models.RoleLayer3))
-							r.Post("/", reworkH.Create)
-						})
+						r.Post("/", reworkH.Create)
 					})
 
 					// Materials
 					r.Route("/materials", func(r chi.Router) {
 						r.Get("/", matH.List)
-						r.Group(func(r chi.Router) {
-							r.Use(appmw.RequireRoles(models.RoleLayer3))
-							r.Post("/", matH.Create)
-						})
+						r.Post("/", matH.Create)
 					})
 
 					// Queries
@@ -208,10 +199,7 @@ func main() {
 
 					// Daily Reports
 					r.Get("/reports", reportH.List)
-					r.Group(func(r chi.Router) {
-						r.Use(appmw.RequireRoles(models.RoleLayer3))
-						r.Post("/reports", reportH.Create)
-					})
+					r.Post("/reports", reportH.Create)
 				})
 			})
 

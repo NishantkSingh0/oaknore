@@ -5,20 +5,10 @@ import (
 	"log"
 
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx"
-	_ "github.com/lib/pq"
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/oaknore/pms3/internal/config"
+	"github.com/oaknore/pms3/internal/database"
+	"golang.org/x/crypto/bcrypt"
 )
-
-type SuperAdmin struct {
-	FirstName string
-	LastName  string
-	Email     string
-	Password  string
-	Phone     string
-}
 
 func main() {
 	cfg, err := config.Load()
@@ -26,82 +16,67 @@ func main() {
 		log.Fatalf("config: %v", err)
 	}
 
-	db, err := sqlx.Open("postgres", cfg.Database.DSN)
+	db, err := database.New(cfg.Database)
 	if err != nil {
-		log.Fatalf("open db: %v", err)
+		log.Fatalf("db: %v", err)
 	}
 	defer db.Close()
 
-	if err := db.Ping(); err != nil {
-		log.Fatalf("ping db: %v", err)
-	}
-
-	// Create organization
+	// ── Create org ────────────────────────────────────────
 	orgID := uuid.New()
-	orgSlug := "oak-nore"
-	orgName := "Oak & ORE"
-
-	var existingOrg string
-	err = db.Get(&existingOrg, "SELECT id FROM organizations WHERE slug=$1", orgSlug)
-	if err == nil {
-		fmt.Printf("Organization '%s' already exists (ID: %s)\n", orgSlug, existingOrg)
-		orgID, _ = uuid.Parse(existingOrg)
+	_, err = db.Exec(
+		`INSERT INTO organizations(id, name, slug)
+		 VALUES($1, $2, $3)
+		 ON CONFLICT (slug) DO UPDATE SET name=EXCLUDED.name
+		 RETURNING id`,
+		orgID, "OAKnORE", "oaknore",
+	)
+	if err != nil {
+		// org likely already exists — fetch its id
+		if e := db.Get(&orgID, `SELECT id FROM organizations WHERE slug='oaknore'`); e != nil {
+			log.Fatalf("org: %v / %v", err, e)
+		}
+		log.Printf("org already exists: %s", orgID)
 	} else {
-		_, err = db.Exec(`
-			INSERT INTO organizations (id, name, slug)
-			VALUES ($1, $2, $3)
-		`, orgID, orgName, orgSlug)
-		if err != nil {
-			log.Fatalf("create organization: %v", err)
-		}
-		fmt.Printf("Created organization: %s (ID: %s)\n", orgName, orgID)
+		log.Printf("org created: %s", orgID)
 	}
 
-	// SuperAdmins to seed
-	superAdmins := []SuperAdmin{
-		{
-			FirstName: "Nishant",
-			LastName:  "Singh",
-			Email:     "n@oaknore.in",
-			Password:  "O$1234567890",
-			Phone:     "9917760469",
-		},
-		// {
-		// 	FirstName: "Admin",
-		// 	LastName:  "User",
-		// 	Email:     "admin@oaknore.com",
-		// 	Password:  "admin123",
-		// 	Phone:     "9876543211",
-		// },
+	// ── Create SUPER_ADMIN user ───────────────────────────
+	hash, _ := bcrypt.GenerateFromPassword([]byte("Admin@123"), bcrypt.DefaultCost)
+	adminID := uuid.New()
+	_, err = db.Exec(
+		`INSERT INTO users(id, org_id, first_name, last_name, email, password_hash, role)
+		 VALUES($1, $2, 'Admin', 'User', 'admin@pms3.com', $3, 'SUPER_ADMIN')
+		 ON CONFLICT (email) DO UPDATE SET password_hash=EXCLUDED.password_hash, org_id=EXCLUDED.org_id`,
+		adminID, orgID, string(hash),
+	)
+	if err != nil {
+		log.Fatalf("admin user: %v", err)
 	}
 
-	fmt.Println("\nSeeding SuperAdmins...")
-	for _, sa := range superAdmins {
-		// Check if user already exists
-		var existingID string
-		err = db.Get(&existingID, "SELECT id FROM users WHERE email=$1", sa.Email)
-		if err == nil {
-			fmt.Printf("User '%s' already exists (ID: %s) - skipping\n", sa.Email, existingID)
-			continue
-		}
+	// ── Create sample Layer 2 department ─────────────────
+	l2ID := uuid.New()
+	_, _ = db.Exec(
+		`INSERT INTO departments(id, org_id, name, layer)
+		 VALUES($1, $2, 'Production Management', 'LAYER_2')
+		 ON CONFLICT DO NOTHING`,
+		l2ID, orgID,
+	)
 
-		// Hash password
-		hash, err := bcrypt.GenerateFromPassword([]byte(sa.Password), bcrypt.DefaultCost)
-		if err != nil {
-			log.Fatalf("password hashing failed for %s: %v", sa.Email, err)
-		}
-
-		userID := uuid.New()
-		_, err = db.Exec(`
-			INSERT INTO users (id, org_id, first_name, last_name, email, phone, password_hash, role)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, 'SUPER_ADMIN')
-		`, userID, orgID, sa.FirstName, sa.LastName, sa.Email, sa.Phone, string(hash))
-		if err != nil {
-			log.Fatalf("create user %s: %v", sa.Email, err)
-		}
-
-		fmt.Printf("Created SuperAdmin: %s %s (%s)\n", sa.FirstName, sa.LastName, sa.Email)
+	// ── Create sample Layer 3 departments ────────────────
+	for _, name := range []string{"Metal", "Carpentry", "Upholstery", "Finishing", "Quality"} {
+		_, _ = db.Exec(
+			`INSERT INTO departments(id, org_id, name, layer)
+			 VALUES($1, $2, $3, 'LAYER_3')
+			 ON CONFLICT DO NOTHING`,
+			uuid.New(), orgID, name,
+		)
 	}
 
-	fmt.Println("\n✅ Seed completed successfully!")
+	fmt.Println("──────────────────────────────────────────")
+	fmt.Println("Seed complete.")
+	fmt.Printf("  Org ID   : %s\n", orgID)
+	fmt.Println("  Login    : admin@pms3.com")
+	fmt.Println("  Password : Admin@123")
+	fmt.Println("──────────────────────────────────────────")
 }

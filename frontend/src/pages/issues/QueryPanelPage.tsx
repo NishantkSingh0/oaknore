@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { queryApi, projectApi } from '@/api/endpoints'
+import { queryApi, projectApi, empApi } from '@/api/endpoints'
 import { useAuth } from '@/context/AuthContext'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import EmptyState from '@/components/ui/EmptyState'
@@ -24,6 +24,7 @@ export default function QueryPanelPage() {
 
   const { data: pRes } = useQuery({ queryKey: ['project', projectId], queryFn: () => projectApi.get(projectId!) })
   const { data, isLoading } = useQuery({ queryKey: ['queries', projectId], queryFn: () => queryApi.list(projectId!), refetchInterval: 10_000 })
+  const { data: empRes } = useQuery({ queryKey: ['employees'], queryFn: () => empApi.list() })
   const { data: detailRes } = useQuery({
     queryKey: ['query', selected],
     queryFn: () => queryApi.get(selected!),
@@ -34,10 +35,11 @@ export default function QueryPanelPage() {
   const queries = data?.data?.data ?? []
   const detail = detailRes?.data?.data
   const messages = detail?.messages ?? []
+  const employees = empRes?.data?.data ?? []
 
   useEffect(() => { msgEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages.length])
 
-  const { register, handleSubmit, reset } = useForm<{ receiver_id: string; subject: string; message: string }>()
+  const { register, handleSubmit, reset } = useForm<{ receiver_email: string; subject: string; message: string }>()
 
   const { mutate: create, isPending: creating } = useMutation({
     mutationFn: (d: object) => queryApi.create(projectId!, d),
@@ -47,17 +49,28 @@ export default function QueryPanelPage() {
       setSelected(res.data.data?.id ?? null)
       toast.success('Query opened')
     },
-    onError: () => toast.error('Failed to create query'),
+    onError: (err: any) => {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to create query'
+      toast.error(errorMsg)
+    },
   })
 
   const { mutate: sendMsg } = useMutation({
     mutationFn: (body: string) => queryApi.postMessage(selected!, body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['query', selected] }); setMsgText('') },
+    onError: (err: any) => {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to send message'
+      toast.error(errorMsg)
+    },
   })
 
   const { mutate: resolveQuery } = useMutation({
     mutationFn: () => queryApi.resolve(selected!),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['query', selected] }); qc.invalidateQueries({ queryKey: ['queries', projectId] }); toast.success('Marked as resolved') },
+    onError: (err: any) => {
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || 'Failed to resolve query'
+      toast.error(errorMsg)
+    },
   })
 
   const project = pRes?.data?.data
@@ -145,8 +158,8 @@ export default function QueryPanelPage() {
       <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="New Query" size="sm">
         <form onSubmit={handleSubmit(d => create(d))} className="space-y-4">
           <div>
-            <label className="label">Receiver User ID *</label>
-            <input {...register('receiver_id', { required: true })} className="input" placeholder="UUID of adjacent layer user" />
+            <label className="label">Receiver Email *</label>
+            <input {...register('receiver_email', { required: true })} className="input" placeholder="user@example.com" />
           </div>
           <div>
             <label className="label">Subject *</label>

@@ -70,25 +70,25 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserIDFrom(r.Context())
 
 	var body struct {
-		PONumber        string     `json:"po_number"`
-		ClientName      string     `json:"client_name"`
-		ClientContact   string     `json:"client_contact"`
-		Name            string     `json:"name"`
-		Quantity        int        `json:"quantity"`
-		Dimensions      string     `json:"dimensions"`
-		Specifications  string     `json:"specifications"`
-		MaterialDetails string     `json:"material_details"`
-		ColorDetails    string     `json:"color_details"`
-		Upholstery      string     `json:"upholstery"`
-		Finish          string     `json:"finish"`
-		DeliveryDate    *time.Time `json:"delivery_date"`
-		DeliveryAddress string     `json:"delivery_address"`
-		Remarks         string     `json:"remarks"`
-		CoverImageURL   string     `json:"cover_image_url"`
-		CADFilesURL     string     `json:"cad_files_url"`
-		DrawingsURL     string     `json:"drawings_url"`
-		JobCardsURL     string     `json:"job_cards_url"`
-		RenderFilesURL  string     `json:"render_files_url"`
+		PONumber        string  `json:"po_number"`
+		ClientName      string  `json:"client_name"`
+		ClientContact   string  `json:"client_contact"`
+		Name            string  `json:"name"`
+		Quantity        int     `json:"quantity"`
+		Dimensions      string  `json:"dimensions"`
+		Specifications  string  `json:"specifications"`
+		MaterialDetails string  `json:"material_details"`
+		ColorDetails    string  `json:"color_details"`
+		Upholstery      string  `json:"upholstery"`
+		Finish          string  `json:"finish"`
+		DeliveryDate    string  `json:"delivery_date"` // accept plain "YYYY-MM-DD"
+		DeliveryAddress string  `json:"delivery_address"`
+		Remarks         string  `json:"remarks"`
+		CoverImageURL   string  `json:"cover_image_url"`
+		CADFilesURL     string  `json:"cad_files_url"`
+		DrawingsURL     string  `json:"drawings_url"`
+		JobCardsURL     string  `json:"job_cards_url"`
+		RenderFilesURL  string  `json:"render_files_url"`
 	}
 	if err := utils.ParseBody(r, &body); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid body")
@@ -100,6 +100,17 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Quantity < 1 {
 		body.Quantity = 1
+	}
+
+	// Parse delivery date — accept "YYYY-MM-DD" or RFC3339
+	var deliveryDate *time.Time
+	if body.DeliveryDate != "" {
+		for _, layout := range []string{"2006-01-02", time.RFC3339} {
+			if t, err := time.Parse(layout, body.DeliveryDate); err == nil {
+				deliveryDate = &t
+				break
+			}
+		}
 	}
 
 	id := uuid.New()
@@ -114,7 +125,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		 NULLIF($19,''),NULLIF($20,''),NULLIF($21,''),$22)`,
 		id, orgID, body.PONumber, body.ClientName, body.ClientContact, body.Name, body.Quantity,
 		body.Dimensions, body.Specifications, body.MaterialDetails, body.ColorDetails,
-		body.Upholstery, body.Finish, body.DeliveryDate, body.DeliveryAddress, body.Remarks,
+		body.Upholstery, body.Finish, deliveryDate, body.DeliveryAddress, body.Remarks,
 		body.CoverImageURL, body.CADFilesURL, body.DrawingsURL, body.JobCardsURL, body.RenderFilesURL,
 		userID,
 	)
@@ -133,12 +144,20 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/projects/{id}
 func (h *ProjectHandler) GetOne(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	id, _ := uuid.Parse(chi.URLParam(r, "projectID"))
 	orgID := middleware.OrgIDFrom(r.Context())
 	var p models.Project
-	if err := h.db.GetContext(r.Context(), &p,
-		`SELECT * FROM projects WHERE id=$1 AND org_id=$2`, id, orgID); err != nil {
-		utils.Error(w, http.StatusNotFound, "project not found")
+	err := h.db.GetContext(r.Context(), &p,
+		`SELECT * FROM projects WHERE id=$1 AND org_id=$2`, id, orgID)
+	if err != nil {
+		// Try without org filter so we can return a better error
+		var exists int
+		_ = h.db.GetContext(r.Context(), &exists, `SELECT COUNT(*) FROM projects WHERE id=$1`, id)
+		if exists == 0 {
+			utils.Error(w, http.StatusNotFound, "project not found")
+		} else {
+			utils.Error(w, http.StatusForbidden, "project belongs to a different organization")
+		}
 		return
 	}
 	utils.Success(w, http.StatusOK, p)
@@ -146,7 +165,7 @@ func (h *ProjectHandler) GetOne(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/v1/projects/{id}   (Admin only — triggers revision)
 func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	id, _ := uuid.Parse(chi.URLParam(r, "projectID"))
 	orgID := middleware.OrgIDFrom(r.Context())
 	userID := middleware.UserIDFrom(r.Context())
 
@@ -158,31 +177,41 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		PONumber        string     `json:"po_number"`
-		ClientName      string     `json:"client_name"`
-		ClientContact   string     `json:"client_contact"`
-		Name            string     `json:"name"`
-		Quantity        *int       `json:"quantity"`
-		Dimensions      string     `json:"dimensions"`
-		Specifications  string     `json:"specifications"`
-		MaterialDetails string     `json:"material_details"`
-		ColorDetails    string     `json:"color_details"`
-		Upholstery      string     `json:"upholstery"`
-		Finish          string     `json:"finish"`
-		DeliveryDate    *time.Time `json:"delivery_date"`
-		DeliveryAddress string     `json:"delivery_address"`
-		Remarks         string     `json:"remarks"`
-		CoverImageURL   string     `json:"cover_image_url"`
-		CADFilesURL     string     `json:"cad_files_url"`
-		DrawingsURL     string     `json:"drawings_url"`
-		JobCardsURL     string     `json:"job_cards_url"`
-		RenderFilesURL  string     `json:"render_files_url"`
-		Reason          string     `json:"reason"`
-		ClientRequestRef string   `json:"client_request_ref"`
+		PONumber         string  `json:"po_number"`
+		ClientName       string  `json:"client_name"`
+		ClientContact    string  `json:"client_contact"`
+		Name             string  `json:"name"`
+		Quantity         *int    `json:"quantity"`
+		Dimensions       string  `json:"dimensions"`
+		Specifications   string  `json:"specifications"`
+		MaterialDetails  string  `json:"material_details"`
+		ColorDetails     string  `json:"color_details"`
+		Upholstery       string  `json:"upholstery"`
+		Finish           string  `json:"finish"`
+		DeliveryDate     string  `json:"delivery_date"` // plain "YYYY-MM-DD"
+		DeliveryAddress  string  `json:"delivery_address"`
+		Remarks          string  `json:"remarks"`
+		CoverImageURL    string  `json:"cover_image_url"`
+		CADFilesURL      string  `json:"cad_files_url"`
+		DrawingsURL      string  `json:"drawings_url"`
+		JobCardsURL      string  `json:"job_cards_url"`
+		RenderFilesURL   string  `json:"render_files_url"`
+		Reason           string  `json:"reason"`
+		ClientRequestRef string  `json:"client_request_ref"`
 	}
 	if err := utils.ParseBody(r, &body); err != nil {
 		utils.Error(w, http.StatusBadRequest, "invalid body")
 		return
+	}
+
+	var deliveryDateUpd *time.Time
+	if body.DeliveryDate != "" {
+		for _, layout := range []string{"2006-01-02", time.RFC3339} {
+			if t, err2 := time.Parse(layout, body.DeliveryDate); err2 == nil {
+				deliveryDateUpd = &t
+				break
+			}
+		}
 	}
 
 	prevJSON, _ := json.Marshal(p)
@@ -213,7 +242,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		 WHERE id=$21 AND org_id=$22`,
 		body.PONumber, body.ClientName, body.ClientContact, body.Name, body.Quantity,
 		body.Dimensions, body.Specifications, body.MaterialDetails, body.ColorDetails,
-		body.Upholstery, body.Finish, body.DeliveryDate, body.DeliveryAddress, body.Remarks,
+		body.Upholstery, body.Finish, deliveryDateUpd, body.DeliveryAddress, body.Remarks,
 		body.CoverImageURL, body.CADFilesURL, body.DrawingsURL, body.JobCardsURL, body.RenderFilesURL,
 		newRev, id, orgID,
 	)
@@ -243,7 +272,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/v1/projects/{id}/status
 func (h *ProjectHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	id, _ := uuid.Parse(chi.URLParam(r, "projectID"))
 	orgID := middleware.OrgIDFrom(r.Context())
 	userID := middleware.UserIDFrom(r.Context())
 	var body struct {
@@ -266,7 +295,7 @@ func (h *ProjectHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/projects/{id}/revisions
 func (h *ProjectHandler) ListRevisions(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	id, _ := uuid.Parse(chi.URLParam(r, "projectID"))
 	orgID := middleware.OrgIDFrom(r.Context())
 
 	// verify project belongs to org
@@ -284,7 +313,7 @@ func (h *ProjectHandler) ListRevisions(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/v1/projects/{id}/timeline
 func (h *ProjectHandler) Timeline(w http.ResponseWriter, r *http.Request) {
-	id, _ := uuid.Parse(chi.URLParam(r, "id"))
+	id, _ := uuid.Parse(chi.URLParam(r, "projectID"))
 	orgID := middleware.OrgIDFrom(r.Context())
 
 	var count int

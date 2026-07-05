@@ -42,12 +42,12 @@ func (h *QueryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	senderID := middleware.UserIDFrom(r.Context())
 
 	var body struct {
-		ReceiverID uuid.UUID `json:"receiver_id"`
-		Subject    string    `json:"subject"`
-		Message    string    `json:"message"`
+		ReceiverEmail string `json:"receiver_email"`
+		Subject       string `json:"subject"`
+		Message       string `json:"message"`
 	}
-	if err := utils.ParseBody(r, &body); err != nil || body.Subject == "" || body.Message == "" {
-		utils.Error(w, http.StatusBadRequest, "receiver_id, subject, message required")
+	if err := utils.ParseBody(r, &body); err != nil || body.ReceiverEmail == "" || body.Subject == "" || body.Message == "" {
+		utils.Error(w, http.StatusBadRequest, "receiver_email, subject, message required")
 		return
 	}
 
@@ -57,7 +57,7 @@ func (h *QueryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		utils.Error(w, http.StatusInternalServerError, "sender not found")
 		return
 	}
-	if err := h.db.GetContext(r.Context(), &receiver, `SELECT * FROM users WHERE id=$1`, body.ReceiverID); err != nil {
+	if err := h.db.GetContext(r.Context(), &receiver, `SELECT * FROM users WHERE email=$1`, body.ReceiverEmail); err != nil {
 		utils.Error(w, http.StatusBadRequest, "receiver not found")
 		return
 	}
@@ -69,7 +69,7 @@ func (h *QueryHandler) Create(w http.ResponseWriter, r *http.Request) {
 	qID := uuid.New()
 	_, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO queries(id,project_id,sender_id,receiver_id,subject) VALUES($1,$2,$3,$4,$5)`,
-		qID, projectID, senderID, body.ReceiverID, body.Subject)
+		qID, projectID, senderID, receiver.ID, body.Subject)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "create failed")
 		return
@@ -80,7 +80,7 @@ func (h *QueryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		`INSERT INTO query_messages(id,query_id,sender_id,body) VALUES($1,$2,$3,$4)`,
 		uuid.New(), qID, senderID, body.Message)
 
-	h.hub.SendToUser(body.ReceiverID, string(models.NotifQueryReceived), map[string]interface{}{
+	h.hub.SendToUser(receiver.ID, string(models.NotifQueryReceived), map[string]interface{}{
 		"query_id": qID, "project_id": projectID, "subject": body.Subject,
 	})
 	writeAudit(r.Context(), h.db, orgID, &senderID, "QUERY_CREATED", "QUERY", &qID, nil, nil)

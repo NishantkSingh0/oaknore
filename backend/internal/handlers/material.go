@@ -44,10 +44,20 @@ func (h *MaterialHandler) Create(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFrom(r.Context())
 	userID := middleware.UserIDFrom(r.Context())
 	deptID := middleware.DeptIDFrom(r.Context())
+	role := middleware.RoleFrom(r.Context())
 
-	if deptID == nil {
+	if deptID == nil && role != models.RoleSuperAdmin && role != models.RoleAdmin {
 		utils.Error(w, http.StatusForbidden, "must belong to a department")
 		return
+	}
+	effectiveDept := deptID
+	if effectiveDept == nil {
+		var anyDept struct{ ID string `db:"id"` }
+		_ = h.db.GetContext(r.Context(), &anyDept, `SELECT id FROM departments WHERE org_id=$1 LIMIT 1`, orgID)
+		if anyDept.ID != "" {
+			id, _ := uuid.Parse(anyDept.ID)
+			effectiveDept = &id
+		}
 	}
 
 	var body struct {
@@ -69,7 +79,7 @@ func (h *MaterialHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO material_requisitions(id,project_id,task_id,requested_by,dept_id,notes)
 		 VALUES($1,$2,$3,$4,$5,NULLIF($6,''))`,
-		id, projectID, body.TaskID, userID, *deptID, body.Notes)
+		id, projectID, body.TaskID, userID, *effectiveDept, body.Notes)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "create failed")
 		return

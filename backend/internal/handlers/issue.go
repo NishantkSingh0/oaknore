@@ -49,10 +49,23 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFrom(r.Context())
 	userID := middleware.UserIDFrom(r.Context())
 	deptID := middleware.DeptIDFrom(r.Context())
+	role := middleware.RoleFrom(r.Context())
 
-	if deptID == nil {
+	// SUPER_ADMIN and ADMIN can raise issues on behalf of any department
+	if deptID == nil && role != models.RoleSuperAdmin && role != models.RoleAdmin {
 		utils.Error(w, http.StatusForbidden, "must belong to a department to raise issues")
 		return
+	}
+
+	// Use a placeholder dept for admins with no department
+	effectiveDept := deptID
+	if effectiveDept == nil {
+		var anyDept struct{ ID string `db:"id"` }
+		_ = h.db.GetContext(r.Context(), &anyDept, `SELECT id FROM departments WHERE org_id=$1 LIMIT 1`, orgID)
+		if anyDept.ID != "" {
+			id, _ := uuid.Parse(anyDept.ID)
+			effectiveDept = &id
+		}
 	}
 
 	var body struct {
@@ -72,7 +85,7 @@ func (h *IssueHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO issues(id,project_id,task_id,raised_by_dept,raised_by,issue_type,custom_type,title,description,assigned_dept)
 		 VALUES($1,$2,$3,$4,$5,$6,NULLIF($7,''),$8,$9,$10)`,
-		id, projectID, body.TaskID, *deptID, userID, body.IssueType, body.CustomType,
+		id, projectID, body.TaskID, *effectiveDept, userID, body.IssueType, body.CustomType,
 		body.Title, body.Description, body.AssignedDept)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "create failed: "+err.Error())

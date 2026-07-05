@@ -66,10 +66,20 @@ func (h *ReportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFrom(r.Context())
 	userID := middleware.UserIDFrom(r.Context())
 	deptID := middleware.DeptIDFrom(r.Context())
+	role := middleware.RoleFrom(r.Context())
 
-	if deptID == nil {
+	if deptID == nil && role != models.RoleSuperAdmin && role != models.RoleAdmin {
 		utils.Error(w, http.StatusForbidden, "must belong to a department")
 		return
+	}
+	effectiveDept := deptID
+	if effectiveDept == nil {
+		var anyDept struct{ ID string `db:"id"` }
+		_ = h.db.GetContext(r.Context(), &anyDept, `SELECT id FROM departments WHERE org_id=$1 LIMIT 1`, orgID)
+		if anyDept.ID != "" {
+			id, _ := uuid.Parse(anyDept.ID)
+			effectiveDept = &id
+		}
 	}
 
 	var body struct {
@@ -90,7 +100,7 @@ func (h *ReportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_, err := h.db.ExecContext(r.Context(),
 		`INSERT INTO daily_reports(id,project_id,department_id,submitted_by,report_date,description)
 		 VALUES($1,$2,$3,$4,$5,$6)`,
-		id, projectID, *deptID, userID, reportDate.Format("2006-01-02"), body.Description)
+		id, projectID, *effectiveDept, userID, reportDate.Format("2006-01-02"), body.Description)
 	if err != nil {
 		utils.Error(w, http.StatusInternalServerError, "create failed")
 		return
